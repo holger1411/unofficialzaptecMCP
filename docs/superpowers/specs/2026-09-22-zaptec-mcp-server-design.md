@@ -49,11 +49,14 @@ tests, packaging) and `holger1411/polestar-mcp`.
   to change it more than once per 15 minutes; limited to installation
   `MaxCurrent`; `null` reverts to maximum.
 - **History**: `GET /api/sessions/archived` (cursor-paginated, requires
-  `From`, `To` and exactly one of `InstallationId` / `ChargerId`) is the
-  successor; `GET /api/chargehistory` is deprecated with sunset 2027-01-01 but
-  currently returns sessions that the archive does not yet contain for the
-  test account. `POST /api/chargehistory/installationreport` works and needs
-  naive local timestamps (`YYYY-MM-DDTHH:MM:SS`, no `Z`).
+  `From`, `To` and exactly one of `InstallationId` / `ChargerId`) returns
+  completed sessions. Its response uses **camelCase** keys (`sessions`,
+  `hasMore`, `cursor`, `startDateTime`, `energy`) unlike the other endpoints,
+  so field access must be case-tolerant. `GET /api/chargehistory` is
+  deprecated (sunset 2027-01-01) and is not used.
+- **Power unit**: observation 513 `TotalChargePower` is in **watts** (live
+  sample: 17 W while the vehicle idled at ~0.5 A); 553
+  `TotalChargePowerSession` is in kWh.
 - Installation detail (`GET /api/installation/{id}`) carries
   `TimeZoneIanaName` (e.g. `Europe/Berlin`); the list endpoint returns `null`
   for it.
@@ -112,13 +115,12 @@ pytest-cov, ruff, mypy. Python 3.10 – 3.14.
   Non-transient 4xx raise `ZaptecApiError` (403 -> `ZaptecPermissionError`,
   404 -> `ZaptecNotFoundError`). Command rejections (500 with JSON `Code`) raise
   `ZaptecCommandRejectedError(code, details)` without retry.
-- **Raw endpoints** (return parsed JSON dicts with PascalCase keys as-is):
+- **Raw endpoints** (return parsed JSON as-is, PascalCase except the archive):
   `list_chargers()`, `get_charger(id)`, `get_charger_state(id)`,
   `list_installations()`, `get_installation(id)`, `get_hierarchy(id)`,
   `send_command(charger_id, command_id)`, `update_installation(id, body)`,
-  `archived_sessions(from, to, charger_id|installation_id)` (follows cursor
-  pages up to a cap), `charge_history_legacy(charger_id, from, to)`,
-  `installation_report(installation_id, from, to)`.
+  `archived_sessions(start, end, charger_id=...)` (follows cursor pages up to
+  a cap of 10 pages x 200).
 - **Resolution**: `resolve_charger(charger_id=None)` returns the charger
   dict: explicit id > `ZAPTEC_DEFAULT_CHARGER_ID` > the only charger; with
   several chargers and no selection, raise `ZaptecError` listing names and
@@ -162,24 +164,20 @@ Pure functions, no I/O, fully unit-tested against fixtures.
     "observed_at": ISO timestamp of the newest observation used
   }
   ```
-  `TotalChargePower` (513) is reported as kW after unit verification against
-  a live fixture; the value and the raw observation are both kept
-  (`power_kw`, `raw_power_value`) until the unit is confirmed by a live test in
-  the implementation phase.
+  `TotalChargePower` (513, watts) is reported as `power_kw` = value / 1000.
 - `format_installation(installation, hierarchy, chargers)` -> address,
   timezone, `max_current_a`, `available_current_a` (+ per phase, mode name),
   `use_load_balancing`, `authentication_required`, `network_type` name,
   `features_enabled` names (bit flags decoded from the `Features` table),
   `circuits: [{name, max_current_a, chargers: [{id, name, device_id, model,
   online, operating_mode}]}]`.
-- `format_history(sessions, *, price_per_kwh, currency, range meta, source)`
-  -> `{"time_range", "start", "end", "timezone", "source": "archived"|"legacy",
+- `format_history(sessions, *, price_per_kwh, currency, range meta)`
+  -> `{"time_range", "start", "end", "timezone",
   "summary": {"session_count", "energy_kwh", "duration_hours",
   "cost" (only if price set), "price_per_kwh", "currency"},
   "sessions": [{id, start, end, duration_minutes, energy_kwh, cost?,
-  charger_name, stopped_by_rfid?, offline?}]}`. Sessions are normalized from
-  either endpoint shape. Timestamps are converted to the installation's IANA
-  timezone. At most 500 sessions are returned; `truncated: true` otherwise.
+  charger_name, stopped_by_rfid, offline, aborted}]}`, voided sessions are
+  skipped. Timestamps are converted to the installation's IANA timezone. At most 500 sessions are returned; `truncated: true` otherwise.
 - `format_command_result(...)` and `format_current_update(...)` produce
   `{"ok": true, "command": "pause", "previous_state": {...}, "note": "..."}`.
 
@@ -189,7 +187,7 @@ Pure functions, no I/O, fully unit-tested against fixtures.
 |---|---|---|---|
 | `zaptec_get_status` | `charger_id?` | resolve charger, fetch state + installation, `format_status` | 15 s |
 | `zaptec_get_installation` | `installation_id?` | installation detail + hierarchy + chargers | 5 min |
-| `zaptec_get_charge_history` | `charger_id?`, `time_range` (today/yesterday/week/month/year/custom, default `month`), `start_date?`, `end_date?` | resolve range in installation timezone; query archived sessions; if empty and now < 2027-01-01, query legacy endpoint and mark `source: legacy` | 5 min |
+| `zaptec_get_charge_history` | `charger_id?`, `time_range` (today/yesterday/week/month/year/custom, default `month`), `start_date?`, `end_date?` | resolve range in installation timezone; query archived sessions for the charger; format with optional cost | 5 min |
 | `zaptec_pause_charging` | `charger_id?` | fetch fresh state; require mode 3, else raise `ZaptecCommandRejectedError` with mode name and hint; send 506; invalidate status cache | none |
 | `zaptec_resume_charging` | `charger_id?` | fetch fresh state; require mode 5 and 718 = 1, else explain (mode 5 + 718 = 0: vehicle stopped itself; mode 2: waiting for authorization / vehicle; mode 1: not connected); send 507; invalidate status cache | none |
 | `zaptec_set_available_current` | `amps` (number or null = reset to max), `installation_id?`, `force?` (bool) | validate `0 <= amps <= MaxCurrent`; enforce min interval since the last update **made by this server process** (in-memory timestamp) unless `force`; POST `{"availableCurrent": amps}`; re-read installation; return previous/new values; invalidate caches | none |
@@ -243,8 +241,7 @@ the redactor.
   sleep), 429 `Retry-After`, command rejection parsing, cursor pagination.
 - Formatter tests against sanitized fixtures captured from the live account
   (`tests/fixtures/charger_list.json`, `charger_state_go2.json`,
-  `installation.json`, `hierarchy.json`, `sessions_legacy.json`,
-  `sessions_archived.json`, `installation_report.json`, `constants_subset.json`).
+  `installation.json`, `hierarchy.json`, `sessions_archived.json`).
 - Server tests: tool dispatch, caching TTLs, guard logic (mode checks, interval
   guard, `force`), error-to-payload mapping, charger resolution with 0/1/n
   chargers.
