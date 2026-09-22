@@ -124,32 +124,48 @@ class ZaptecClient:
             return await self._login()
 
     async def _login(self) -> str:
+        """Password grant with retry: the token endpoint allows 1 request/s per IP."""
         log.info("logging in to Zaptec cloud")
-        try:
-            resp = await self._http.post(
-                "/oauth/token",
-                data={
-                    "grant_type": "password",
-                    "username": self._cfg.username,
-                    "password": self._cfg.password,
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-            )
-        except httpx.HTTPError as exc:
-            raise ZaptecConnectionError(f"login failed: {type(exc).__name__}") from exc
-        if resp.status_code != 200:
-            raise ZaptecAuthError(
-                f"login rejected with HTTP {resp.status_code}; "
-                "check ZAPTEC_USERNAME and ZAPTEC_PASSWORD"
-            )
-        body = _json_or_none(resp) or {}
-        token = body.get("access_token")
-        if not isinstance(token, str) or not token:
-            raise ZaptecAuthError("login response contained no access_token")
-        expires_in = float(body.get("expires_in") or 3600)
-        self._token = token
-        self._token_expires_at = self._clock() + expires_in
-        return token
+        attempt = 0
+        while True:
+            try:
+                resp = await self._http.post(
+                    "/oauth/token",
+                    data={
+                        "grant_type": "password",
+                        "username": self._cfg.username,
+                        "password": self._cfg.password,
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+            except httpx.HTTPError as exc:
+                if attempt < MAX_RETRIES:
+                    await self._backoff(attempt, None)
+                    attempt += 1
+                    continue
+                raise ZaptecConnectionError(f"login failed: {type(exc).__name__}") from exc
+            status = resp.status_code
+            if status == 429 or status >= 500:
+                if attempt < MAX_RETRIES:
+                    await self._backoff(attempt, _retry_after(resp))
+                    attempt += 1
+                    continue
+                raise ZaptecConnectionError(
+                    f"login failed with HTTP {status} after {attempt} retries"
+                )
+            if status != 200:
+                raise ZaptecAuthError(
+                    f"login rejected with HTTP {status}; "
+                    "check ZAPTEC_USERNAME and ZAPTEC_PASSWORD"
+                )
+            body = _json_or_none(resp) or {}
+            token = body.get("access_token")
+            if not isinstance(token, str) or not token:
+                raise ZaptecAuthError("login response contained no access_token")
+            expires_in = float(body.get("expires_in") or 3600)
+            self._token = token
+            self._token_expires_at = self._clock() + expires_in
+            return token
 
     # -- requests -------------------------------------------------------------
 

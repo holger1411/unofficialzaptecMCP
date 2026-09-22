@@ -230,3 +230,41 @@ async def test_empty_body_returns_none() -> None:
     posts = [c for c in api.calls if c.method == "POST" and "update" in c.url.path]
     sent: Any = json.loads(posts[0].content)
     assert sent == {"a": 1}
+
+
+async def test_login_retries_503_and_429_then_succeeds() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        if request.url.path == "/oauth/token":
+            attempts += 1
+            if attempts == 1:
+                return httpx.Response(503)
+            if attempts == 2:
+                return httpx.Response(429, headers={"Retry-After": "1"})
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 100})
+        return httpx.Response(200, json=[])
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    client = ZaptecClient(CFG, transport=httpx.MockTransport(handler), sleep=fake_sleep)
+    assert await client.request("GET", "/api/x") == []
+    assert attempts == 3
+    assert len(sleeps) == 2
+    assert sleeps[1] >= 1.0
+
+
+async def test_login_gives_up_after_retries() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    async def no_sleep(_: float) -> None:
+        pass
+
+    client = ZaptecClient(CFG, transport=httpx.MockTransport(handler), sleep=no_sleep)
+    with pytest.raises(ZaptecConnectionError):
+        await client.request("GET", "/api/x")
