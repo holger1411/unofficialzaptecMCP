@@ -1,0 +1,26 @@
+{
+ "Pages": 1,
+ "TotalCount": 1,
+ "Data": [
+  {
+   "OperatingMode": 3,
+   "IsOnline": true,
+   "Id": "00000001-0000-4000-8000-000000000001",
+   "MID": "ZPR000001",
+   "DeviceId": "ZPR000001",
+   "SerialNo": "Garage",
+   "Name": "Garage",
+   "CreatedOnDate": "2026-09-20T11:17:33.273",
+   "CircuitId": "00000002-0000-4000-8000-000000000002",
+   "Active": true,
+   "CurrentUserRoles": 3,
+   "Pin": "0000",
+   "DeviceType": 4,
+   "InstallationName": "Example Installation",
+   "InstallationId": "00000003-0000-4000-8000-000000000003",
+   "AuthenticationType": 0,
+   "CurrentUserInstallationRoles": 3,
+   "IsAuthorizationRequired": false
+  }
+ ]
+}

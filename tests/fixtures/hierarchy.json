@@ -1,0 +1,28 @@
+{
+ "Id": "00000003-0000-4000-8000-000000000003",
+ "Name": "Garage",
+ "InstallationName": "Example Installation",
+ "NetworkType": 4,
+ "Circuits": [
+  {
+   "Id": "00000002-0000-4000-8000-000000000002",
+   "Name": "Charge circuit",
+   "MaxCurrent": 32.0,
+   "IsActive": true,
+   "Active": true,
+   "InstallationId": "00000003-0000-4000-8000-000000000003",
+   "InstallationName": "Example Installation",
+   "Chargers": [
+    {
+     "Id": "00000001-0000-4000-8000-000000000001",
+     "DeviceId": "ZPR000001",
+     "MID": "ZPR000001",
+     "Name": "Garage",
+     "SerialNo": "Garage",
+     "Active": true,
+     "DeviceType": 4
+    }
+   ]
+  }
+ ]
+}

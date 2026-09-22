@@ -1,0 +1,127 @@
+{
+ "sessions": [
+  {
+   "id": "00000009-0000-4000-8000-000000000009",
+   "externalId": null,
+   "replacedBySessionId": null,
+   "authorizedUser": null,
+   "tokenName": null,
+   "chargerId": "00000001-0000-4000-8000-000000000001",
+   "deviceId": "ZPR000001",
+   "deviceName": "Garage",
+   "chargerFirmwareVersion": "3.1.0.8",
+   "chargerDeviceType": 4,
+   "installationId": "00000003-0000-4000-8000-000000000003",
+   "installationName": "Example Installation",
+   "startDateTime": "2026-09-20T11:11:06.77+00:00",
+   "endDateTime": "2026-09-20T12:06:24.493+00:00",
+   "recognizedDateTime": "2026-09-20T12:06:24.493+00:00",
+   "offline": false,
+   "reliableClock": true,
+   "stoppedByRfid": false,
+   "signed": true,
+   "voided": false,
+   "aborted": false,
+   "ocppNative": false,
+   "externallyAbandoned": false,
+   "sessionSignature": "OCMF|{\"FV\":\"1.0\",\"GI\":\"Zaptec Go 2\",\"GS\":\"ZPR000001\",\"GV\":\"3.1.0.8\",\"MF\":\"v2.6.7\",\"PG\":\"T1\",\"IS\":false,\"RD\":[{\"TM\":\"2026-09-20T11:11:06,396+00:00 S\",\"TX\":\"B\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":0,\"ST\":\"G\"},{\"TM\":\"2026-09-20T12:00:00,111+00:00 S\",\"TX\":\"T\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":8.34,\"ST\":\"G\"},{\"TM\":\"2026-09-20T12:06:22,754+00:00 S\",\"TX\":\"E\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":9.205,\"ST\":\"G\"}],\"ZS\":\"00000009-0000-4000-8000-000000000009\"}|{\"SA\":\"redacted\"}",
+   "sessionSignatureEichreicht": null,
+   "energy": 9.205,
+   "energyDetails": [
+    {
+     "timestamp": "2026-09-20T11:11:06.396+00:00",
+     "energy": 0
+    },
+    {
+     "timestamp": "2026-09-20T12:00:00.111+00:00",
+     "energy": 8.34
+    },
+    {
+     "timestamp": "2026-09-20T12:06:22.754+00:00",
+     "energy": 0.8650000000000002
+    }
+   ]
+  },
+  {
+   "id": "00000010-0000-4000-8000-000000000010",
+   "externalId": null,
+   "replacedBySessionId": null,
+   "authorizedUser": null,
+   "tokenName": null,
+   "chargerId": "00000001-0000-4000-8000-000000000001",
+   "deviceId": "ZPR000001",
+   "deviceName": "Garage",
+   "chargerFirmwareVersion": "3.1.0.8",
+   "chargerDeviceType": 4,
+   "installationId": "00000003-0000-4000-8000-000000000003",
+   "installationName": "Example Installation",
+   "startDateTime": "2026-09-21T06:23:04.473+00:00",
+   "endDateTime": "2026-09-21T10:20:49.68+00:00",
+   "recognizedDateTime": "2026-09-21T10:20:49.68+00:00",
+   "offline": false,
+   "reliableClock": true,
+   "stoppedByRfid": false,
+   "signed": true,
+   "voided": false,
+   "aborted": false,
+   "ocppNative": false,
+   "externallyAbandoned": false,
+   "sessionSignature": "OCMF|{\"FV\":\"1.0\",\"GI\":\"Zaptec Go 2\",\"GS\":\"ZPR000001\",\"GV\":\"3.1.0.8\",\"MF\":\"v2.6.7\",\"PG\":\"T1\",\"IS\":false,\"RD\":[{\"TM\":\"2026-09-21T06:23:04,211+00:00 S\",\"TX\":\"B\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":9.196,\"ST\":\"G\"},{\"TM\":\"2026-09-21T07:00:00,199+00:00 S\",\"TX\":\"T\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":9.534,\"ST\":\"G\"},{\"TM\":\"2026-09-21T08:00:00,174+00:00 S\",\"TX\":\"T\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":9.839,\"ST\":\"G\"},{\"TM\":\"2026-09-21T10:00:00,044+00:00 S\",\"TX\":\"T\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":11.024,\"ST\":\"G\"},{\"TM\":\"2026-09-21T10:20:49,296+00:00 S\",\"TX\":\"E\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":14.726,\"ST\":\"G\"}],\"ZS\":\"00000010-0000-4000-8000-000000000010\"}|{\"SA\":\"redacted\"}",
+   "sessionSignatureEichreicht": null,
+   "energy": 5.53,
+   "energyDetails": [
+    {
+     "timestamp": "2026-09-21T06:23:04.211+00:00",
+     "energy": 0
+    },
+    {
+     "timestamp": "2026-09-21T07:00:00.199+00:00",
+     "energy": 0.33800000000000097
+    },
+    {
+     "timestamp": "2026-09-21T08:00:00.174+00:00",
+     "energy": 0.3049999999999997
+    },
+    {
+     "timestamp": "2026-09-21T10:00:00.044+00:00",
+     "energy": 1.1849999999999987
+    },
+    {
+     "timestamp": "2026-09-21T10:20:49.296+00:00",
+     "energy": 3.7020000000000017
+    }
+   ]
+  },
+  {
+   "id": "00000005-0000-4000-8000-000000000005",
+   "externalId": null,
+   "replacedBySessionId": null,
+   "authorizedUser": null,
+   "tokenName": null,
+   "chargerId": "00000001-0000-4000-8000-000000000001",
+   "deviceId": "ZPR000001",
+   "deviceName": "Garage",
+   "chargerFirmwareVersion": "3.1.0.8",
+   "chargerDeviceType": 4,
+   "installationId": "00000003-0000-4000-8000-000000000003",
+   "installationName": "Example Installation",
+   "startDateTime": "2026-09-21T10:48:43.91+00:00",
+   "endDateTime": "2026-09-21T12:40:56.253+00:00",
+   "recognizedDateTime": "2026-09-21T12:40:56.253+00:00",
+   "offline": false,
+   "reliableClock": false,
+   "stoppedByRfid": false,
+   "signed": true,
+   "voided": false,
+   "aborted": false,
+   "ocppNative": false,
+   "externallyAbandoned": false,
+   "sessionSignature": "OCMF|{\"FV\":\"1.0\",\"GI\":\"Zaptec Go 2\",\"GS\":\"ZPR000001\",\"GV\":\"3.1.0.8\",\"MF\":\"v2.6.7\",\"PG\":\"T1\",\"IS\":false,\"RD\":[{\"TM\":\"2026-09-21T10:48:43,633+00:00 S\",\"TX\":\"B\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":14.726,\"ST\":\"G\"},{\"TM\":\"2026-09-21T11:00:00,012+00:00 S\",\"TX\":\"T\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":16.669,\"ST\":\"G\"},{\"TM\":\"2026-09-21T12:00:00,217+00:00 S\",\"TX\":\"T\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":27.249,\"ST\":\"G\"},{\"TM\":\"1970-01-01T00:00:14,529+00:00 U\",\"TX\":\"E\",\"RU\":\"kWh\",\"RI\":\"1-0:1.8.0\",\"RV\":27.566,\"ST\":\"G\"}],\"ZS\":\"00000005-0000-4000-8000-000000000005\"}|{\"SA\":\"redacted\"}",
+   "sessionSignatureEichreicht": null,
+   "energy": 12.84,
+   "energyDetails": []
+  }
+ ],
+ "cursor": null,
+ "hasMore": false
+}
