@@ -1,0 +1,30 @@
+{
+  "name": "unofficial-zaptec-mcp",
+  "version": "0.1.0",
+  "description": "Unofficial MCP server for Zaptec EV chargers: status, history with optional cost, pause/resume, available current. Not affiliated with Zaptec AS.",
+  "license": "MIT",
+  "homepage": "https://github.com/holger1411/unofficialzaptecMCP",
+  "keywords": ["mcp", "zaptec", "ev-charger", "wallbox", "home-automation", "claude"],
+  "mcp": {
+    "tools": [
+      {"name": "zaptec_get_status", "description": "Current charger snapshot: operating mode, power, session energy, phases, diagnostics, available current."},
+      {"name": "zaptec_get_installation", "description": "Installation details: address, timezone, max and available current, load balancing, features, circuits, chargers."},
+      {"name": "zaptec_get_charge_history", "description": "Completed sessions in a time range with totals and optional cost."},
+      {"name": "zaptec_pause_charging", "description": "Pause the running charging session (changes state)."},
+      {"name": "zaptec_resume_charging", "description": "Resume a paused charging session (changes state)."},
+      {"name": "zaptec_set_available_current", "description": "Set or reset the installation's available current in amps (changes state, rate-guarded)."}
+    ]
+  },
+  "configuration": {
+    "ZAPTEC_USERNAME": {"type": "string", "required": true, "sensitive": true, "description": "Zaptec account email"},
+    "ZAPTEC_PASSWORD": {"type": "string", "required": true, "sensitive": true, "description": "Zaptec account password"},
+    "ZAPTEC_PRICE_PER_KWH": {"type": "number", "required": false, "description": "Electricity price; enables cost fields in the history tool"},
+    "ZAPTEC_CURRENCY": {"type": "string", "default": "EUR"},
+    "ZAPTEC_DEFAULT_CHARGER_ID": {"type": "string", "required": false, "description": "Charger to use when the account sees several"},
+    "ZAPTEC_MIN_CURRENT_UPDATE_INTERVAL": {"type": "number", "default": 900, "description": "Seconds between available-current changes; 0 disables the guard"},
+    "ZAPTEC_CACHE_ENABLED": {"type": "boolean", "default": true},
+    "ZAPTEC_LOG_LEVEL": {"type": "string", "default": "INFO", "enum": ["DEBUG", "INFO", "WARNING", "ERROR"]},
+    "ZAPTEC_API_BASE_URL": {"type": "string", "default": "https://api.zaptec.com"}
+  },
+  "entry_point": {"type": "python_module", "module": "zaptec_mcp_server.__main__", "function": "main"}
+}

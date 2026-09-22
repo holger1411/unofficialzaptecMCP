@@ -60,4 +60,6 @@ def configure_logging(level: str = "INFO") -> SecretRedactor:
     root.handlers.clear()
     root.addHandler(handler)
     root.setLevel(level.upper())
+    # httpx logs every request at INFO; keep our own INFO output readable.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     return redactor
