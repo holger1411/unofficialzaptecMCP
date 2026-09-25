@@ -20,7 +20,8 @@ tests, packaging) and `holger1411/polestar-mcp`.
 
 ## 2. Facts established during research (2026-09-22)
 
-- Official OpenAPI spec is in `apidocs/ZaptecApi.json` (OpenAPI 3.0.4, base
+- Official OpenAPI spec: `https://api.zaptec.com/swagger/v1/swagger.json`,
+  kept locally in the git-ignored `apidocs/ZaptecApi.json` (OpenAPI 3.0.4, base
   URL `https://api.zaptec.com`).
 - **Auth**: OAuth2 password grant `POST /oauth/token`
   (`grant_type=password&username&password`, form-encoded). Response has

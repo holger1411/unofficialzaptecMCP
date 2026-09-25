@@ -20,3 +20,6 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
+
+# local copy of the Zaptec OpenAPI spec (not redistributed, see README)
+apidocs/

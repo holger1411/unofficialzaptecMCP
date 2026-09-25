@@ -1,5 +1,11 @@
 # unofficialzaptecMCP
 
+> [!WARNING]
+> **Unofficial community project.** This is not a Zaptec product. It is not
+> affiliated with, endorsed by, sponsored by or supported by Zaptec AS.
+> Please do not contact Zaptec support about this software; open an issue
+> here instead.
+
 An **unofficial** MCP (Model Context Protocol) server that connects a Zaptec
 EV charger (Zaptec Go, Go 2, Pro) to AI assistants like Claude. Ask for the
 charging status, energy and cost of the last month, pause or resume a
@@ -138,7 +144,9 @@ ones with `scripts/probe.py --dump` and run them through
 ## Credits
 
 - **Zaptec** for the public API and its documentation at
-  [docs.zaptec.com](https://docs.zaptec.com).
+  [docs.zaptec.com](https://docs.zaptec.com). The OpenAPI spec is available
+  at [api.zaptec.com/swagger/v1/swagger.json](https://api.zaptec.com/swagger/v1/swagger.json);
+  it is not redistributed in this repository.
 - [custom-components/zaptec](https://github.com/custom-components/zaptec) and
   [pyzaptec](https://pypi.org/project/pyzaptec/) (MIT), whose observation and
   command handling served as reference.
@@ -149,4 +157,8 @@ ones with `scripts/probe.py --dump` and run them through
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE). The license covers this project's code only. "Zaptec" and
+related names and logos are trademarks of Zaptec AS; they are used here only
+to describe compatibility. The software is provided "as is", without
+warranty of any kind. You use it at your own risk, including any effect on
+your charger, installation or electricity bill.

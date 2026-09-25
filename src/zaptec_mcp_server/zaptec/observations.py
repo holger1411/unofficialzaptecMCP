@@ -8,7 +8,8 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-# Generated from the ObservationId enum in apidocs/ZaptecApi.json.
+# Generated from the ObservationId enum in the official Zaptec OpenAPI spec
+# (https://api.zaptec.com/swagger/v1/swagger.json).
 OBSERVATIONS: dict[int, str] = {
     0: "Unknown",
     1: "OfflineMode",
