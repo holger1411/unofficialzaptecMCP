@@ -22,8 +22,9 @@ classifiers = [
   "Topic :: Home Automation",
 ]
 dependencies = [
-  "mcp>=1.0.0,<2",
+  "mcp>=2.2,<3",
   "httpx>=0.27",
+  "jsonschema>=4.18",
 ]
 
 [project.optional-dependencies]
