@@ -62,7 +62,7 @@
   "ChargerId": "00000001-0000-4000-8000-000000000001",
   "StateId": 157,
   "Timestamp": "2026-09-20T12:06:30.713",
-  "ValueAsString": "zap-p-iothub-01.azure-devices.net"
+  "ValueAsString": "iothub.example.invalid"
  },
  {
   "ChargerId": "00000001-0000-4000-8000-000000000001",
@@ -380,7 +380,7 @@
   "ChargerId": "00000001-0000-4000-8000-000000000001",
   "StateId": 808,
   "Timestamp": "2026-09-22T14:30:18.18",
-  "ValueAsString": "0d 01h55m12s T_EM: 34.09 33.16 33.22  T_M: 30.65 30.73   V: 239.88 242.18 239.33   I: 0.48 0.49 0.48  0.017kW 11.284kWh CP: 20.0 C6 CM3 Stop:0 PI:2927 MCnt:3967 Rs:2 Rc:0 NTPs: 1"
+  "ValueAsString": "0d 00h00m00s diagnostics-redacted"
  },
  {
   "ChargerId": "00000001-0000-4000-8000-000000000001",

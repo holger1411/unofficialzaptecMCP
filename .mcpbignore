@@ -1,0 +1,21 @@
+# Keep credentials, tests and local state out of the bundle.
+.env
+.env.*
+!.env.example
+.git/
+.github/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+**/__pycache__/
+*.egg-info/
+build/
+dist/
+apidocs/
+docs/
+scripts/
+tests/
+local-tmp/
+*.mcpb

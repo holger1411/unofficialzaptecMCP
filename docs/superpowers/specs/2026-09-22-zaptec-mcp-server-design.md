@@ -1,7 +1,10 @@
 # Unofficial Zaptec MCP Server — Design
 
 Date: 2026-09-22
-Status: approved (chat), implementation pending
+Status: implemented (v0.1.0)
+
+> This document records the original v0.1 design. Later changes are not
+> reflected here; the [CHANGELOG](../../../CHANGELOG.md) is authoritative.
 
 ## 1. Goal
 

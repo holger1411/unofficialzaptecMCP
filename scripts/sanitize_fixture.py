@@ -3,7 +3,8 @@
 Usage: python scripts/sanitize_fixture.py raw.json > tests/fixtures/name.json
 
 Replaces UUIDs (consistently across files when run in one process), device
-ids, names, addresses, coordinates, signatures and the charger PIN with fake
+ids, names, addresses, coordinates, signatures, the charger PIN, the IoT hub
+hostname, the diagnostics string and the installation's support group with fake
 values. Always eyeball the result before committing.
 """
 
@@ -37,11 +38,24 @@ _NUMERIC_KEYS: dict[str, float] = {"Latitude": 0.0, "Longitude": 0.0}
 _KEEP_NAME_UNDER = {"Circuits"}
 # Charger state observations whose value is identifying (name, MAC, keys, ids).
 _STATE_VALUE_OVERRIDES: dict[int, str] = {
+    157: "iothub.example.invalid",
     158: "scope-redacted",
     802: "Garage",
+    808: "0d 00h00m00s diagnostics-redacted",
     830: "",
     952: "00:00:00:00:00:00",
     981: "publickey-redacted",
+}
+# Installation support group: names the installer or reseller, so every field
+# that identifies it is replaced. Applied after the generic key replacements.
+_SUPPORT_GROUP_OVERRIDES: dict[str, str] = {
+    "Name": "Example Support Group",
+    "LookupKey": "EXAMPLE",
+    "SupportUrl": "https://support.example.com",
+    "SupportEmail": "support@example.com",
+    "SupportPhone": "",
+    "SupportDetails": "",
+    "CreatedOn": "2026-01-01T00:00:00",
 }
 
 
@@ -75,7 +89,10 @@ class Sanitizer:
             state_id = node.get("StateId")
             if isinstance(state_id, int) and state_id in _STATE_VALUE_OVERRIDES:
                 node = {**node, "ValueAsString": _STATE_VALUE_OVERRIDES[state_id]}
-            return {k: self.walk(v, k, key) for k, v in node.items()}
+            result = {k: self.walk(v, k, key) for k, v in node.items()}
+            if key == "SupportGroup":
+                result.update({k: v for k, v in _SUPPORT_GROUP_OVERRIDES.items() if k in result})
+            return result
         if isinstance(node, list):
             return [self.walk(v, key, parent) for v in node]
         if key is not None:

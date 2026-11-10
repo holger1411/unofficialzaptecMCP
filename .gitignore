@@ -23,3 +23,9 @@ htmlcov/
 
 # local copy of the Zaptec OpenAPI spec (not redistributed, see README)
 apidocs/
+
+# raw API dumps for fixture capture (contain real ids and addresses)
+local-tmp/
+
+# built Claude Desktop extension bundles
+*.mcpb

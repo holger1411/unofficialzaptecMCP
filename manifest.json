@@ -1,30 +1,81 @@
 {
+  "manifest_version": "0.4",
   "name": "unofficial-zaptec-mcp",
+  "display_name": "Unofficial Zaptec MCP",
   "version": "0.1.0",
-  "description": "Unofficial MCP server for Zaptec EV chargers: status, history with optional cost, pause/resume, available current. Not affiliated with Zaptec AS.",
-  "license": "MIT",
+  "description": "Unofficial MCP server for Zaptec EV chargers: status, charging history, pause/resume, available current. Not affiliated with Zaptec AS.",
+  "long_description": "Unofficial community project. Not a Zaptec product and not affiliated with, endorsed by or supported by Zaptec AS. Connects to the public Zaptec cloud API with your own Zaptec account. Three tools change the state of your installation: pause charging, resume charging and set available current.",
+  "author": {
+    "name": "Holger Könemann",
+    "url": "https://github.com/holger1411"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/holger1411/unofficialzaptecMCP.git"
+  },
   "homepage": "https://github.com/holger1411/unofficialzaptecMCP",
-  "keywords": ["mcp", "zaptec", "ev-charger", "wallbox", "home-automation", "claude"],
-  "mcp": {
-    "tools": [
-      {"name": "zaptec_get_status", "description": "Current charger snapshot: operating mode, power, session energy, phases, diagnostics, available current."},
-      {"name": "zaptec_get_installation", "description": "Installation details: address, timezone, max and available current, load balancing, features, circuits, chargers."},
-      {"name": "zaptec_get_charge_history", "description": "Completed sessions in a time range with totals and optional cost."},
-      {"name": "zaptec_pause_charging", "description": "Pause the running charging session (changes state)."},
-      {"name": "zaptec_resume_charging", "description": "Resume a paused charging session (changes state)."},
-      {"name": "zaptec_set_available_current", "description": "Set or reset the installation's available current in amps (changes state, rate-guarded)."}
-    ]
+  "documentation": "https://github.com/holger1411/unofficialzaptecMCP#readme",
+  "support": "https://github.com/holger1411/unofficialzaptecMCP/issues",
+  "license": "MIT",
+  "keywords": ["mcp", "zaptec", "ev-charger", "wallbox", "home-automation"],
+  "server": {
+    "type": "uv",
+    "entry_point": "src/zaptec_mcp_server/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "unofficial-zaptec-mcp"],
+      "env": {
+        "ZAPTEC_USERNAME": "${user_config.zaptec_username}",
+        "ZAPTEC_PASSWORD": "${user_config.zaptec_password}"
+      }
+    }
   },
-  "configuration": {
-    "ZAPTEC_USERNAME": {"type": "string", "required": true, "sensitive": true, "description": "Zaptec account email"},
-    "ZAPTEC_PASSWORD": {"type": "string", "required": true, "sensitive": true, "description": "Zaptec account password"},
-    "ZAPTEC_PRICE_PER_KWH": {"type": "number", "required": false, "description": "Electricity price; enables cost fields in the history tool"},
-    "ZAPTEC_CURRENCY": {"type": "string", "default": "EUR"},
-    "ZAPTEC_DEFAULT_CHARGER_ID": {"type": "string", "required": false, "description": "Charger to use when the account sees several"},
-    "ZAPTEC_MIN_CURRENT_UPDATE_INTERVAL": {"type": "number", "default": 900, "description": "Seconds between available-current changes; 0 disables the guard"},
-    "ZAPTEC_CACHE_ENABLED": {"type": "boolean", "default": true},
-    "ZAPTEC_LOG_LEVEL": {"type": "string", "default": "INFO", "enum": ["DEBUG", "INFO", "WARNING", "ERROR"]},
-    "ZAPTEC_API_BASE_URL": {"type": "string", "default": "https://api.zaptec.com"}
+  "tools": [
+    {
+      "name": "zaptec_get_status",
+      "description": "Current charger snapshot: operating mode, power, session energy, phases, diagnostics, available current."
+    },
+    {
+      "name": "zaptec_get_installation",
+      "description": "Installation details: address, timezone, max and available current, load balancing, features, circuits, chargers."
+    },
+    {
+      "name": "zaptec_get_charge_history",
+      "description": "Completed sessions in a time range with totals and optional cost."
+    },
+    {
+      "name": "zaptec_pause_charging",
+      "description": "Pause the running charging session (changes state)."
+    },
+    {
+      "name": "zaptec_resume_charging",
+      "description": "Resume a paused charging session (changes state)."
+    },
+    {
+      "name": "zaptec_set_available_current",
+      "description": "Set or reset the installation's available current in amps (changes state, rate-guarded)."
+    }
+  ],
+  "tools_generated": false,
+  "compatibility": {
+    "platforms": ["darwin", "linux", "win32"],
+    "runtimes": {
+      "python": ">=3.11"
+    }
   },
-  "entry_point": {"type": "python_module", "module": "zaptec_mcp_server.__main__", "function": "main"}
+  "user_config": {
+    "zaptec_username": {
+      "type": "string",
+      "title": "Zaptec account email",
+      "description": "The login of your Zaptec account (the same as in the Zaptec app).",
+      "required": true
+    },
+    "zaptec_password": {
+      "type": "string",
+      "title": "Zaptec account password",
+      "description": "Stored by Claude Desktop in the operating system keychain.",
+      "sensitive": true,
+      "required": true
+    }
+  }
 }

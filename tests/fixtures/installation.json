@@ -48,16 +48,16 @@
  "PropertySessionMaxStopCount": 5,
  "SupportGroup": {
   "Id": "00000008-0000-4000-8000-000000000008",
-  "Name": "Garage",
-  "CreatedOn": "2024-03-11T11:37:07.34",
-  "LookupKey": "VVNL",
+  "Name": "Example Support Group",
+  "CreatedOn": "2026-01-01T00:00:00",
+  "LookupKey": "EXAMPLE",
   "Protected": false,
   "ServiceLevelSupport": true,
   "ServiceLevelAllowOcppNative": true,
   "ServiceLevelTechnicalRead": true,
   "ServiceLevelAllowOcppMigrationToolAccess": false,
-  "SupportUrl": "test.de",
-  "SupportEmail": "test@mail.de",
+  "SupportUrl": "https://support.example.com",
+  "SupportEmail": "support@example.com",
   "SupportPhone": "",
   "SupportDetails": ""
  }

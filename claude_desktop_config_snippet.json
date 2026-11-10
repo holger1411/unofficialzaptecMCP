@@ -1,14 +1,14 @@
 {
   "mcpServers": {
     "unofficial-zaptec-mcp": {
-      "command": "/absolute/path/to/unofficialzaptecMCP/.venv/bin/python",
-      "args": ["-m", "zaptec_mcp_server"],
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/holger1411/unofficialzaptecMCP",
+        "unofficial-zaptec-mcp"
+      ],
       "env": {
-        "ZAPTEC_USERNAME": "your-email@example.com",
-        "ZAPTEC_PASSWORD": "your-password",
-        "ZAPTEC_PRICE_PER_KWH": "0.30",
-        "ZAPTEC_CURRENCY": "EUR",
-        "ZAPTEC_LOG_LEVEL": "INFO"
+        "ZAPTEC_ENV_FILE": "/absolute/path/to/zaptec.env"
       }
     }
   }
