@@ -10,6 +10,7 @@ from zaptec_mcp_server.zaptec.observations import (
     Obs,
     StateMap,
     decode_features,
+    decode_phase_id,
     decode_phases,
     field,
     parse_api_datetime,
@@ -89,6 +90,18 @@ def test_decoders() -> None:
     assert decode_phases(4) == ["L3"]
     assert decode_phases(7) == ["L1", "L2", "L3"]
     assert decode_phases(0) == []
+
+
+def test_decode_phase_id_uses_the_phase_id_map() -> None:
+    # PhaseIdMap from /api/constants: 4 = all phases (TN), 3 = L3 only, 9 = all (IT).
+    assert decode_phase_id(4) == ["L1", "L2", "L3"]
+    assert decode_phase_id(1) == ["L1"]
+    assert decode_phase_id(3) == ["L3"]
+    assert decode_phase_id(5) == ["L3"]
+    assert decode_phase_id(9) == ["L1", "L2", "L3"]
+    assert decode_phase_id(7) == []
+    assert decode_phase_id(0) == []
+    assert decode_phase_id(None) == []
 
 
 def test_parse_ocmf() -> None:

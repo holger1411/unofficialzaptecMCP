@@ -15,7 +15,7 @@ from .observations import (
     Obs,
     StateMap,
     decode_features,
-    decode_phases,
+    decode_phase_id,
     field,
     parse_api_datetime,
     parse_ocmf,
@@ -63,6 +63,13 @@ def _current_mode(obj: dict[str, Any]) -> str:
     return AVAILABLE_CURRENT_MODES.get(code, "manual")
 
 
+def _observed_at(sm: StateMap) -> str | None:
+    """Newest observation time as ISO 8601 with offset (the API sends naive UTC)."""
+    raw = sm.newest_timestamp()
+    parsed = parse_api_datetime(raw)
+    return raw if parsed is None else parsed.isoformat(timespec="seconds")
+
+
 def format_status(
     charger: dict[str, Any], state: list[dict[str, Any]], installation: dict[str, Any]
 ) -> dict[str, Any]:
@@ -85,7 +92,7 @@ def format_status(
             "power_kw": _r(None if power_w is None else power_w / 1000.0),
             "session_energy_kwh": _r(sm.get_float(Obs.SESSION_ENERGY)),
             "charge_current_set_a": _r(sm.get_float(Obs.CHARGE_CURRENT_SET)),
-            "active_phases": decode_phases(sm.get_int(Obs.ACTIVE_PHASES)),
+            "active_phases": decode_phase_id(sm.get_int(Obs.SET_PHASES)),
             "final_stop_active": sm.get_bool(Obs.FINAL_STOP_ACTIVE),
             "current_a": {
                 "l1": _r(sm.get_float(Obs.CURRENT_L1)),
@@ -116,7 +123,7 @@ def format_status(
             "warnings": sm.get(Obs.WARNINGS),
         },
         "authorization_required": bool(field(charger, "IsAuthorizationRequired", False)),
-        "observed_at": sm.newest_timestamp(),
+        "observed_at": _observed_at(sm),
     }
 
 

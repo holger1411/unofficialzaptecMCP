@@ -56,6 +56,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool definitions and dispatch moved from `__main__.py` to `tool_defs.py`.
 
 ### Fixed
+- `zaptec_get_status`: `active_phases` decoded observation 519 (SetPhases) as a
+  bit mask and reported `["L3"]` for a three-phase charger. The value is an id
+  from Zaptec's `PhaseIdMap`; id 4 now gives `["L1", "L2", "L3"]`.
+- `zaptec_get_status`: `observed_at` carries a UTC offset instead of a naive
+  timestamp.
+- `zaptec_get_installation`: device type 4 is labelled "Zaptec Go / Go 2"; the
+  charger list cannot tell the two apart.
 - Re-login after a 401 happens once, even with concurrent requests.
 - `zaptec_set_available_current`: the 15-minute guard is race-free; the call
   is refused when the installation reports no numeric maximum; non-finite

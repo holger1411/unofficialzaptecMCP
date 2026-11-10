@@ -189,7 +189,7 @@ class Obs:
     CHARGER_MAX_CURRENT = 510
     CHARGER_MIN_CURRENT = 511
     TOTAL_CHARGE_POWER = 513
-    ACTIVE_PHASES = 519
+    SET_PHASES = 519
     MAX_PHASES = 520
     SESSION_ENERGY = 553
     SIGNED_METER_VALUE = 554
@@ -240,7 +240,7 @@ DEVICE_TYPES: dict[int, str] = {
     1: "Zaptec Pro",
     2: "Zaptec Portable",
     3: "Zaptec Home APM",
-    4: "Zaptec Go",
+    4: "Zaptec Go / Go 2",
     5: "Other APM",
     6: "Generic APM",
     7: "HAN APM",
@@ -269,6 +269,10 @@ FEATURES: dict[int, str] = {
     131072: "PowerManagement_Apm_SurplusMode",
 }
 _PHASE_BITS = {1: "L1", 2: "L2", 4: "L3"}
+# Observation 519 (SetPhases) holds an id from the PhaseIdMap constant of
+# /api/constants, not a bit mask: id -> Phases flags (1 = L1, 2 = L2, 4 = L3).
+# Ids 1-4 are TN networks, 5-9 IT networks.
+_PHASE_ID_FLAGS = {1: 1, 2: 2, 3: 4, 4: 7, 5: 4, 6: 2, 8: 1, 9: 7}
 
 
 def decode_features(bits: int | None) -> list[str]:
@@ -278,9 +282,17 @@ def decode_features(bits: int | None) -> list[str]:
 
 
 def decode_phases(bits: int | None) -> list[str]:
+    """Phases flags (bit mask) -> phase names."""
     if not bits:
         return []
     return [name for bit, name in _PHASE_BITS.items() if bits & bit]
+
+
+def decode_phase_id(phase_id: int | None) -> list[str]:
+    """SetPhases id -> phase names; unknown ids give an empty list."""
+    if phase_id is None:
+        return []
+    return decode_phases(_PHASE_ID_FLAGS.get(phase_id))
 
 
 def field(d: Mapping[str, Any], name: str, default: Any = None) -> Any:

@@ -27,7 +27,7 @@ def test_format_status_shape(
     assert ch["power_kw"] == 0.017
     assert ch["session_energy_kwh"] == 11.284
     assert ch["charge_current_set_a"] == 19.992
-    assert ch["active_phases"] == ["L3"]
+    assert ch["active_phases"] == ["L1", "L2", "L3"]  # SetPhases id 4 = all phases (TN)
     assert ch["final_stop_active"] is False
     assert ch["current_a"] == {"l1": 0.477, "l2": 0.485, "l3": 0.483}
     assert ch["voltage_v"]["l1"] == 239.881
@@ -44,7 +44,7 @@ def test_format_status_shape(
     assert diag["signal_strength_dbm"] == -74.0
     assert diag["communication_mode"] == "Wifi"
     assert out["authorization_required"] is False
-    assert out["observed_at"].startswith("2026-09-22T14:32:42")
+    assert out["observed_at"] == "2026-09-22T14:32:42+00:00"
 
 
 def test_format_status_handles_sparse_state() -> None:
@@ -87,7 +87,7 @@ def test_format_installation(
     assert c["name"] == "Garage"
     assert c["online"] is True
     assert c["operating_mode"] == "connected_charging"
-    assert c["model"] == "Zaptec Go"
+    assert c["model"] == "Zaptec Go / Go 2"
 
 
 def _range() -> tuple[datetime, datetime]:

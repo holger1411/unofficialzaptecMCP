@@ -101,7 +101,10 @@ STATUS_OUTPUT = {
                 "power_kw": _NUM,
                 "session_energy_kwh": _NUM,
                 "charge_current_set_a": _NUM,
-                "active_phases": _STR_LIST,
+                "active_phases": {
+                    **_STR_LIST,
+                    "description": "Phases the charger is set to use (L1, L2, L3)",
+                },
                 "final_stop_active": _BOOL,
                 "current_a": _PHASES,
                 "voltage_v": _PHASES,
@@ -133,7 +136,7 @@ STATUS_OUTPUT = {
             },
         },
         "authorization_required": {"type": "boolean"},
-        "observed_at": _STR,
+        "observed_at": {**_STR, "description": "Newest observation, ISO 8601 with offset"},
     },
     "required": ["charger", "operating_mode", "charging", "installation", "diagnostics"],
 }
