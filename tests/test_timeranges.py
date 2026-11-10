@@ -1,12 +1,12 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
 
-from zaptec_mcp_server.zaptec.timeranges import resolve_range
+from zaptec_mcp_server.zaptec.timeranges import resolve_range, validate_custom_dates
 
 TZ = ZoneInfo("Europe/Berlin")
-NOW = datetime(2026, 9, 22, 14, 30, tzinfo=timezone.utc)  # Tuesday, 16:30 Berlin
+NOW = datetime(2026, 9, 22, 14, 30, tzinfo=UTC)  # Tuesday, 16:30 Berlin
 
 
 def test_today() -> None:
@@ -46,3 +46,33 @@ def test_custom_requires_dates_and_unknown_raises() -> None:
         resolve_range("decade", now=NOW, tz=TZ)
     with pytest.raises(ValueError):
         resolve_range("today", now=NOW.replace(tzinfo=None), tz=TZ)
+
+
+def test_custom_rejects_end_before_start() -> None:
+    with pytest.raises(ValueError, match=r"end_date .* before start_date"):
+        resolve_range(
+            "custom", now=NOW, tz=TZ, start_date=date(2026, 9, 3), end_date=date(2026, 9, 1)
+        )
+
+
+def test_custom_single_day_and_max_span() -> None:
+    start, end = resolve_range(
+        "custom", now=NOW, tz=TZ, start_date=date(2026, 9, 3), end_date=date(2026, 9, 3)
+    )
+    assert end - start == timedelta(days=1)
+    # 366 days inclusive (a whole leap year) is the limit
+    resolve_range(
+        "custom", now=NOW, tz=TZ, start_date=date(2028, 1, 1), end_date=date(2028, 12, 31)
+    )
+    with pytest.raises(ValueError, match=r"367 days.*366"):
+        resolve_range(
+            "custom", now=NOW, tz=TZ, start_date=date(2028, 1, 1), end_date=date(2029, 1, 1)
+        )
+
+
+def test_validate_custom_dates_standalone() -> None:
+    validate_custom_dates(date(2026, 1, 1), date(2026, 1, 31))
+    with pytest.raises(ValueError):
+        validate_custom_dates(None, date(2026, 1, 31))
+    with pytest.raises(ValueError):
+        validate_custom_dates(date(2026, 2, 1), date(2026, 1, 31))

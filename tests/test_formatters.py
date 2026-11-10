@@ -150,7 +150,7 @@ def test_format_history_with_price_and_truncation(
 
 
 def test_format_history_skips_voided_and_sorts() -> None:
-    sessions = [
+    sessions: list[dict[str, Any]] = [
         {
             "id": "b",
             "startDateTime": "2026-09-05T10:00:00Z",
@@ -185,3 +185,54 @@ def test_format_history_skips_voided_and_sorts() -> None:
     assert [s["id"] for s in out["sessions"]] == ["a", "b"]
     assert out["summary"]["energy_kwh"] == 3.0
     assert out["summary"]["duration_hours"] == 1.5
+
+
+def _history(sessions: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:
+    start, end = _range()
+    return format_history(
+        sessions,
+        tz=TZ,
+        time_range="month",
+        start=start,
+        end=end,
+        price_per_kwh=None,
+        currency="EUR",
+        **kw,
+    )
+
+
+def test_format_history_not_truncated_has_empty_reasons(
+    sessions_archived: list[dict[str, Any]],
+) -> None:
+    out = _history(sessions_archived)
+    assert out["truncated"] is False
+    assert out["truncated_by"] == []
+    assert "truncation_note" not in out
+
+
+def test_format_history_display_cap_is_reported(
+    sessions_archived: list[dict[str, Any]],
+) -> None:
+    out = _history(sessions_archived, max_sessions=2)
+    assert out["truncated"] is True
+    assert out["truncated_by"] == ["display_limit"]
+    assert "2 of 3" in out["truncation_note"]
+
+
+def test_format_history_api_cap_is_reported(sessions_archived: list[dict[str, Any]]) -> None:
+    out = _history(sessions_archived, api_truncated=True)
+    assert out["truncated"] is True
+    assert out["truncated_by"] == ["api_page_limit"]
+    assert len(out["sessions"]) == 3
+    assert "narrow" in out["truncation_note"]
+
+
+def test_format_history_both_caps(sessions_archived: list[dict[str, Any]]) -> None:
+    out = _history(sessions_archived, max_sessions=1, api_truncated=True)
+    assert out["truncated_by"] == ["display_limit", "api_page_limit"]
+
+
+def test_format_status_tolerates_overflowing_numbers() -> None:
+    out = format_status({"Id": "x", "DeviceType": float("inf"), "OperatingMode": 1e400}, [], {})
+    assert out["charger"]["model"] == "Unknown"
+    assert out["operating_mode"]["name"] == "unknown"

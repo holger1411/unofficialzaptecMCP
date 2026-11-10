@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import json
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
 
 from tests.conftest import load_fixture
 from tests.test_server import build, fixture_api
+from zaptec_mcp_server.cache.manager import CacheManager
+from zaptec_mcp_server.config import ServerConfig
+from zaptec_mcp_server.server import ZaptecTools
 from zaptec_mcp_server.utils.errors import ZaptecCommandRejectedError, ZaptecGuardError
+from zaptec_mcp_server.zaptec.client import ZaptecClient
 
 
 def state_with(mode: int, final_stop: int = 0) -> list[dict[str, Any]]:
@@ -121,9 +126,7 @@ async def test_set_available_current_happy_path_and_guard() -> None:
 
 async def test_set_available_current_force_and_reset() -> None:
     clock = [1000.0]
-    api = fixture_api(
-        None, {("POST", f"/api/installation/{iid()}/update"): [httpx.Response(200)]}
-    )
+    api = fixture_api(None, {("POST", f"/api/installation/{iid()}/update"): [httpx.Response(200)]})
     tools = build(api, clock=clock)
     await tools.set_available_current(16)
     await tools.set_available_current(None, force=True)
@@ -140,9 +143,111 @@ async def test_set_available_current_validation() -> None:
 
 
 async def test_guard_disabled_by_config() -> None:
-    api = fixture_api(
-        None, {("POST", f"/api/installation/{iid()}/update"): [httpx.Response(200)]}
-    )
+    api = fixture_api(None, {("POST", f"/api/installation/{iid()}/update"): [httpx.Response(200)]})
     tools = build(api, {"ZAPTEC_MIN_CURRENT_UPDATE_INTERVAL": "0"})
     await tools.set_available_current(8)
     await tools.set_available_current(9)
+
+
+# -- set_available_current hardening --------------------------------------------
+
+
+class CurrentStubClient:
+    """Minimal ZaptecClient stand-in for set_available_current."""
+
+    def __init__(self, installation: dict[str, Any]) -> None:
+        self.installation = installation
+        self.updates: list[dict[str, Any]] = []
+
+    async def resolve_installation(
+        self, installation_id: str | None = None, **_: Any
+    ) -> dict[str, Any]:
+        return self.installation
+
+    async def update_installation(self, installation_id: str, body: dict[str, Any]) -> None:
+        await asyncio.sleep(0.01)
+        self.updates.append(body)
+
+    async def get_installation(self, installation_id: str) -> dict[str, Any]:
+        return self.installation
+
+    def invalidate_lists(self) -> None:
+        pass
+
+
+def stub_tools(installation: dict[str, Any]) -> tuple[CurrentStubClient, ZaptecTools]:
+    client = CurrentStubClient(installation)
+    cfg = ServerConfig.from_env({"ZAPTEC_USERNAME": "u@example.com", "ZAPTEC_PASSWORD": "pw123456"})
+    tools = ZaptecTools(
+        client=cast(ZaptecClient, client), cache=CacheManager(), cfg=cfg, clock=lambda: 1000.0
+    )
+    return client, tools
+
+
+async def test_concurrent_current_updates_are_serialized_by_the_guard() -> None:
+    client, tools = stub_tools(dict(load_fixture("installation")))
+    results = await asyncio.gather(
+        tools.set_available_current(10),
+        tools.set_available_current(12),
+        return_exceptions=True,
+    )
+    assert len(client.updates) == 1
+    assert sum(isinstance(r, ZaptecGuardError) for r in results) == 1
+
+
+@pytest.mark.parametrize("max_current", [None, "32", float("nan"), True])
+async def test_refuses_amps_without_usable_max_current(max_current: Any) -> None:
+    inst = dict(load_fixture("installation"))
+    inst["MaxCurrent"] = max_current
+    client, tools = stub_tools(inst)
+    with pytest.raises(ZaptecGuardError, match="MaxCurrent"):
+        await tools.set_available_current(500)
+    with pytest.raises(ZaptecGuardError, match="MaxCurrent"):
+        await tools.set_available_current(6)
+    assert client.updates == []
+
+
+async def test_reset_allowed_without_max_current() -> None:
+    inst = dict(load_fixture("installation"))
+    del inst["MaxCurrent"]
+    client, tools = stub_tools(inst)
+    await tools.set_available_current(None)
+    assert client.updates == [{"availableCurrent": None}]
+
+
+@pytest.mark.parametrize("amps", [float("nan"), float("inf"), float("-inf"), True, False, "10"])
+async def test_rejects_non_finite_and_non_numeric_amps(amps: Any) -> None:
+    client, tools = stub_tools(dict(load_fixture("installation")))
+    with pytest.raises(ZaptecGuardError, match="finite number"):
+        await tools.set_available_current(amps)
+    assert client.updates == []
+
+
+async def test_zero_amps_is_accepted() -> None:
+    client, tools = stub_tools(dict(load_fixture("installation")))
+    out = await tools.set_available_current(0)
+    assert client.updates == [{"availableCurrent": 0.0}]
+    assert out["requested_available_current_a"] == 0.0
+
+
+@pytest.mark.parametrize(("mode", "final_stop"), [(1, 0), (2, 0), (5, 0), (0, 0), (4, 0)])
+async def test_pause_guard_messages(mode: int, final_stop: int) -> None:
+    phrases = {
+        1: "no vehicle",
+        2: "waiting for authorization",
+        5: "not charging",
+        0: "unknown",
+        4: "unknown",
+    }
+    tools = build(fixture_api(state_with(mode, final_stop)))
+    with pytest.raises(ZaptecGuardError) as info:
+        await tools.pause_charging()
+    assert str(info.value).startswith("cannot pause: ")
+    assert phrases[mode] in str(info.value)
+    assert info.value.payload["charger_id"] == cid()
+
+
+async def test_resume_guard_unknown_state() -> None:
+    tools = build(fixture_api(state_with(0)))
+    with pytest.raises(ZaptecGuardError, match="cannot resume: the charger state is unknown"):
+        await tools.resume_charging()

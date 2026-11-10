@@ -11,12 +11,12 @@ import argparse
 import asyncio
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from zaptec_mcp_server.config import ServerConfig, load_dotenv
+from zaptec_mcp_server.config import ServerConfig, load_dotenv, resolve_env_file
 from zaptec_mcp_server.utils.logging import configure_logging
 from zaptec_mcp_server.zaptec.client import ZaptecClient
 from zaptec_mcp_server.zaptec.formatters import format_status
@@ -24,9 +24,11 @@ from zaptec_mcp_server.zaptec.observations import field
 
 
 async def main(dump: Path | None) -> None:
-    load_dotenv()
+    load_dotenv(resolve_env_file())
     cfg = ServerConfig.from_env()
-    configure_logging("INFO")
+    redactor = configure_logging("INFO")
+    redactor.add(cfg.password)
+    redactor.add(cfg.username)
     client = ZaptecClient(cfg)
     try:
         charger = await client.resolve_charger()
@@ -35,12 +37,14 @@ async def main(dump: Path | None) -> None:
         installation = await client.resolve_installation(charger=charger)
         iid = field(installation, "Id")
         hierarchy = await client.get_hierarchy(iid)
-        now = datetime.now(timezone.utc)
-        sessions = await client.archived_sessions(
+        now = datetime.now(UTC)
+        history = await client.archived_sessions(
             start=now - timedelta(days=30), end=now, charger_id=cid
         )
+        sessions = history.sessions
         print(json.dumps(format_status(charger, state, installation), indent=2))
-        print(f"{len(sessions)} sessions in the last 30 days")
+        more = " (truncated: the API reported more)" if history.truncated else ""
+        print(f"{len(sessions)} sessions in the last 30 days{more}")
         if dump:
             dump.mkdir(parents=True, exist_ok=True)
             chargers = await client.list_chargers()

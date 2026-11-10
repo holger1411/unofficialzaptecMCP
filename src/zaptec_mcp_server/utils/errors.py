@@ -20,6 +20,10 @@ class ZaptecAuthError(ZaptecError):
     """Login failed (bad credentials, token rejected twice)."""
 
 
+class ZaptecConfigError(ZaptecError, ValueError):
+    """Invalid configuration (environment variables, env file). Fatal at startup."""
+
+
 class ZaptecPermissionError(ZaptecError):
     """HTTP 403: the account lacks owner/service rights for this call."""
 

@@ -29,7 +29,7 @@ def _r(value: float | None, digits: int = 3) -> float | None:
 def _int_or_none(value: Any) -> int | None:
     try:
         return None if value is None else int(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -213,7 +213,13 @@ def format_history(
     price_per_kwh: float | None,
     currency: str,
     max_sessions: int = 500,
+    api_truncated: bool = False,
 ) -> dict[str, Any]:
+    """Summarize archived sessions.
+
+    `api_truncated` means the client stopped paging while the API still had more
+    sessions; the summary then covers only what was retrieved.
+    """
     rows: list[dict[str, Any]] = []
     for s in sessions:
         if field(s, "Voided", False):
@@ -233,12 +239,45 @@ def format_history(
         summary["cost"] = round(energy * price_per_kwh, 2)
         summary["price_per_kwh"] = price_per_kwh
         summary["currency"] = currency
-    return {
+    truncated_by = _truncation_reasons(len(rows), max_sessions, api_truncated)
+    out: dict[str, Any] = {
         "time_range": time_range,
         "start": start.isoformat(timespec="seconds"),
         "end": end.isoformat(timespec="seconds"),
         "timezone": str(tz.key),
         "summary": summary,
         "sessions": rows[:max_sessions],
-        "truncated": len(rows) > max_sessions,
+        "truncated": bool(truncated_by),
+        "truncated_by": truncated_by,
     }
+    if truncated_by:
+        out["truncation_note"] = _truncation_note(truncated_by, len(rows), max_sessions)
+    return out
+
+
+DISPLAY_LIMIT = "display_limit"
+API_PAGE_LIMIT = "api_page_limit"
+
+
+def _truncation_reasons(count: int, max_sessions: int, api_truncated: bool) -> list[str]:
+    reasons = []
+    if count > max_sessions:
+        reasons.append(DISPLAY_LIMIT)
+    if api_truncated:
+        reasons.append(API_PAGE_LIMIT)
+    return reasons
+
+
+def _truncation_note(reasons: list[str], count: int, max_sessions: int) -> str:
+    parts = []
+    if DISPLAY_LIMIT in reasons:
+        parts.append(
+            f"Only the first {max_sessions} of {count} sessions are listed; the summary "
+            "covers all retrieved sessions."
+        )
+    if API_PAGE_LIMIT in reasons:
+        parts.append(
+            "The Zaptec API reported more sessions than this server fetches per request, so "
+            "the summary is incomplete; narrow the time range."
+        )
+    return " ".join(parts)

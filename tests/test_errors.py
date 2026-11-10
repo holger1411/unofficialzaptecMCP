@@ -1,6 +1,7 @@
 from zaptec_mcp_server.utils.errors import (
     ZaptecApiError,
     ZaptecCommandRejectedError,
+    ZaptecConfigError,
     ZaptecError,
     ZaptecGuardError,
     ZaptecNotFoundError,
@@ -35,6 +36,14 @@ def test_command_rejected_payload() -> None:
     err = ZaptecCommandRejectedError("nope", code=528, details="not paused")
     assert err.payload == {"code": 528, "details": "not paused"}
     assert isinstance(err, ZaptecError)
+
+
+def test_config_error_is_zaptec_and_value_error() -> None:
+    err = ZaptecConfigError("bad")
+    assert isinstance(err, ZaptecError)
+    assert isinstance(err, ValueError)
+    assert str(err) == "bad"
+    assert err.payload == {}
 
 
 def test_guard_error_is_zaptec_error() -> None:

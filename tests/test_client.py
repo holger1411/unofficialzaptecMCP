@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -109,6 +110,44 @@ async def test_401_triggers_single_relogin() -> None:
     )
     client = make_client(api)
     assert await client.request("GET", "/api/chargers") == {"Data": [1]}
+    assert api.token_calls == 2
+
+
+async def test_concurrent_401_triggers_single_relogin() -> None:
+    """Requests that share one rejected token must not stampede the token endpoint."""
+    token_calls = 0
+    stale = "tok1"
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal token_calls
+        await asyncio.sleep(0.01)  # yield, so the concurrent requests really interleave
+        if request.url.path == "/oauth/token":
+            token_calls += 1
+            return httpx.Response(
+                200, json={"access_token": f"tok{token_calls}", "expires_in": 3600}
+            )
+        if request.headers["Authorization"] == f"Bearer {stale}":
+            return httpx.Response(401)
+        return httpx.Response(200, json={"ok": True})
+
+    async def no_sleep(_: float) -> None:
+        pass
+
+    client = ZaptecClient(CFG, transport=httpx.MockTransport(handler), sleep=no_sleep)
+    await client._ensure_token()  # cache tok1, which the server will reject
+    results = await asyncio.gather(*(client.request("GET", "/api/x") for _ in range(5)))
+    assert results == [{"ok": True}] * 5
+    assert token_calls == 2
+    await client.close()
+
+
+async def test_relogin_skipped_when_token_already_replaced() -> None:
+    api = FakeApi({("GET", "/api/x"): [httpx.Response(200, json=1)]})
+    client = make_client(api)
+    await client._ensure_token()
+    await client._ensure_token(rejected="some-older-token")
+    assert api.token_calls == 1
+    await client._ensure_token(rejected="tok1")
     assert api.token_calls == 2
 
 

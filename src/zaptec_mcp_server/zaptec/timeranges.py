@@ -8,6 +8,25 @@ from zoneinfo import ZoneInfo
 
 RangeName = Literal["today", "yesterday", "week", "month", "year", "custom"]
 
+MAX_CUSTOM_DAYS = 366
+
+
+def validate_custom_dates(start_date: date | None, end_date: date | None) -> tuple[date, date]:
+    """Check a custom range (both dates inclusive) and return it. Raises ValueError."""
+    if start_date is None or end_date is None:
+        raise ValueError("custom range requires start_date and end_date")
+    if end_date < start_date:
+        raise ValueError(
+            f"end_date {end_date.isoformat()} is before start_date {start_date.isoformat()}"
+        )
+    days = (end_date - start_date).days + 1
+    if days > MAX_CUSTOM_DAYS:
+        raise ValueError(
+            f"custom range covers {days} days; the maximum is {MAX_CUSTOM_DAYS} days. "
+            "Split it into several requests."
+        )
+    return start_date, end_date
+
 
 def resolve_range(
     name: str,
@@ -41,8 +60,7 @@ def resolve_range(
     if name == "year":
         return today_start.replace(month=1, day=1), now_local
     if name == "custom":
-        if start_date is None or end_date is None:
-            raise ValueError("custom range requires start_date and end_date")
+        start_date, end_date = validate_custom_dates(start_date, end_date)
         start = datetime(start_date.year, start_date.month, start_date.day, tzinfo=tz)
         end = datetime(end_date.year, end_date.month, end_date.day, tzinfo=tz) + timedelta(days=1)
         return start, end

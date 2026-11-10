@@ -7,7 +7,7 @@ import logging
 import signal
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from mcp.server import CacheHint, Server, ServerRequestContext
 from mcp.server.stdio import stdio_server
@@ -15,10 +15,11 @@ from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, Pa
 
 from . import __version__
 from .cache.manager import CacheManager
-from .config import ServerConfig, load_dotenv
+from .config import ServerConfig, env_file_permission_warning, load_dotenv, resolve_env_file
 from .server import ZaptecTools
 from .tool_defs import call_tool, tool_definitions
-from .utils.logging import configure_logging
+from .utils.errors import ZaptecError
+from .utils.logging import SecretRedactor, configure_logging
 from .zaptec.client import ZaptecClient
 
 log = logging.getLogger("zaptec_mcp_server")
@@ -48,12 +49,35 @@ def build_server(tools: ZaptecTools) -> Server[Any]:
     )
 
 
-async def _run() -> None:
-    load_dotenv(Path(".env"))
-    cfg = ServerConfig.from_env()
+def load_config() -> tuple[ServerConfig, Path]:
+    """Load the env file (ZAPTEC_ENV_FILE or ./.env) and build the config.
+
+    Raises ZaptecError/ValueError/OSError for anything misconfigured.
+    """
+    env_file = resolve_env_file()
+    load_dotenv(env_file)
+    return ServerConfig.from_env(), env_file
+
+
+def _setup_logging(cfg: ServerConfig, env_file: Path) -> SecretRedactor:
     redactor = configure_logging(cfg.log_level)
     redactor.add(cfg.password)
     redactor.add(cfg.username)
+    warning = env_file_permission_warning(env_file)
+    if warning:
+        log.warning("%s", warning)
+    return redactor
+
+
+def _config_error(exc: BaseException) -> NoReturn:
+    # One line on stderr; stdout carries JSON-RPC and must stay untouched.
+    message = " ".join(str(exc).split()) or type(exc).__name__
+    print(f"unofficial-zaptec-mcp: configuration error: {message}", file=sys.stderr)
+    sys.exit(2)
+
+
+async def _run(cfg: ServerConfig, env_file: Path) -> None:
+    _setup_logging(cfg, env_file)
 
     client = ZaptecClient(cfg)
     tools = ZaptecTools(client=client, cache=CacheManager(enabled=cfg.cache_enabled), cfg=cfg)
@@ -85,7 +109,11 @@ async def _run() -> None:
 
 def main() -> None:
     try:
-        asyncio.run(_run())
+        cfg, env_file = load_config()
+    except (ZaptecError, ValueError, OSError) as exc:
+        _config_error(exc)
+    try:
+        asyncio.run(_run(cfg, env_file))
     except KeyboardInterrupt:
         sys.exit(130)
 

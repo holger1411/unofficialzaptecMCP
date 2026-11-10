@@ -50,11 +50,28 @@ class SecretRedactor(logging.Filter):
         return True
 
 
+class RedactingFormatter(logging.Formatter):
+    """Scrubs the fully formatted line, including traceback and stack text.
+
+    The filter alone is not enough: the formatter appends `exc_info` and
+    `stack_info` after filters have run, so exception messages would leak.
+    """
+
+    def __init__(self, fmt: str, redactor: SecretRedactor) -> None:
+        super().__init__(fmt)
+        self._redactor = redactor
+
+    def format(self, record: logging.LogRecord) -> str:
+        return self._redactor.scrub(super().format(record))
+
+
 def configure_logging(level: str = "INFO") -> SecretRedactor:
     """Configure the root logger to write to stderr through the redactor."""
     redactor = SecretRedactor()
     handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    handler.setFormatter(
+        RedactingFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s", redactor)
+    )
     handler.addFilter(redactor)
     root = logging.getLogger()
     root.handlers.clear()

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
 from jsonschema import Draft202012Validator
@@ -17,13 +19,27 @@ log = logging.getLogger("zaptec_mcp_server")
 
 # -- shared schema fragments --------------------------------------------------
 
-_CHARGER_ID = {
+# Zaptec ids are UUIDs; anything else is rejected before it can reach a URL path.
+UUID_PATTERN = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+# minLength/maxLength: Python's re lets "$" match before a trailing newline.
+_UUID: dict[str, Any] = {
     "type": "string",
-    "description": "Optional charger id. Defaults to ZAPTEC_DEFAULT_CHARGER_ID or the only charger.",
+    "format": "uuid",
+    "pattern": UUID_PATTERN,
+    "minLength": 36,
+    "maxLength": 36,
+}
+_CHARGER_ID = {
+    **_UUID,
+    "description": (
+        "Optional charger id (UUID). Defaults to ZAPTEC_DEFAULT_CHARGER_ID or the only charger."
+    ),
 }
 _INSTALLATION_ID = {
-    "type": "string",
-    "description": "Optional installation id. Defaults to the installation of the default charger.",
+    **_UUID,
+    "description": (
+        "Optional installation id (UUID). Defaults to the installation of the default charger."
+    ),
 }
 
 # Values passed through from the Zaptec API carry no type constraint: the API is
@@ -210,9 +226,31 @@ HISTORY_OUTPUT = {
                 "required": ["id", "start", "end", "duration_minutes", "energy_kwh"],
             },
         },
-        "truncated": {"type": "boolean"},
+        "truncated": {
+            "type": "boolean",
+            "description": "True if sessions were left out; truncated_by says why.",
+        },
+        "truncated_by": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["display_limit", "api_page_limit"]},
+            "description": (
+                "display_limit: only the first 500 sessions are listed (summary covers all "
+                "retrieved). api_page_limit: the API had more sessions than were fetched "
+                "(summary is incomplete; narrow the range)."
+            ),
+        },
+        "truncation_note": {"type": "string"},
     },
-    "required": ["time_range", "start", "end", "timezone", "summary", "sessions", "truncated"],
+    "required": [
+        "time_range",
+        "start",
+        "end",
+        "timezone",
+        "summary",
+        "sessions",
+        "truncated",
+        "truncated_by",
+    ],
 }
 
 COMMAND_OUTPUT = {
@@ -249,13 +287,81 @@ CURRENT_OUTPUT = {
     ],
 }
 
-# -- tool definitions ---------------------------------------------------------
+# -- tool registry -------------------------------------------------------------
 
 _READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=True)
+_STATE_CHANGING = ToolAnnotations(
+    read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=True
+)
+_DESTRUCTIVE = ToolAnnotations(
+    read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=True
+)
+
+Handler = Callable[[ZaptecTools, dict[str, Any]], Awaitable[Any]]
 
 
-def tool_definitions() -> list[Tool]:
-    return [
+def _object(properties: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    """Closed input object schema; `extra` adds keywords such as required/if/then."""
+    return {"type": "object", "properties": properties, **extra, "additionalProperties": False}
+
+
+# Custom ranges need both dates ("if"/"then" are Python keywords, hence the dict).
+_CUSTOM_NEEDS_DATES: dict[str, Any] = {
+    "if": {"properties": {"time_range": {"const": "custom"}}, "required": ["time_range"]},
+    "then": {"required": ["start_date", "end_date"]},
+}
+
+
+async def _get_status(t: ZaptecTools, a: dict[str, Any]) -> Any:
+    return await t.get_status(charger_id=a.get("charger_id"))
+
+
+async def _get_installation(t: ZaptecTools, a: dict[str, Any]) -> Any:
+    return await t.get_installation(installation_id=a.get("installation_id"))
+
+
+async def _get_charge_history(t: ZaptecTools, a: dict[str, Any]) -> Any:
+    return await t.get_charge_history(
+        charger_id=a.get("charger_id"),
+        time_range=a.get("time_range") or "month",
+        start_date=a.get("start_date"),
+        end_date=a.get("end_date"),
+    )
+
+
+async def _pause_charging(t: ZaptecTools, a: dict[str, Any]) -> Any:
+    return await t.pause_charging(charger_id=a.get("charger_id"))
+
+
+async def _resume_charging(t: ZaptecTools, a: dict[str, Any]) -> Any:
+    return await t.resume_charging(charger_id=a.get("charger_id"))
+
+
+async def _set_available_current(t: ZaptecTools, a: dict[str, Any]) -> Any:
+    return await t.set_available_current(
+        a.get("amps"),
+        installation_id=a.get("installation_id"),
+        force=bool(a.get("force", False)),
+    )
+
+
+@dataclass(frozen=True)
+class _Entry:
+    tool: Tool
+    handler: Handler
+    validator: Draft202012Validator
+
+
+def _entry(tool: Tool, handler: Handler) -> _Entry:
+    # The v2 SDK no longer validates arguments against inputSchema; do it here.
+    validator = Draft202012Validator(
+        tool.input_schema, format_checker=Draft202012Validator.FORMAT_CHECKER
+    )
+    return _Entry(tool, handler, validator)
+
+
+_ENTRIES = (
+    _entry(
         Tool(
             name="zaptec_get_status",
             title="Get charger status",
@@ -265,14 +371,13 @@ def tool_definitions() -> list[Tool]:
                 "session energy, per-phase current and voltage, cable, diagnostics, and the "
                 "installation's available current. Read-only."
             ),
-            input_schema={
-                "type": "object",
-                "properties": {"charger_id": _CHARGER_ID},
-                "additionalProperties": False,
-            },
+            input_schema=_object({"charger_id": _CHARGER_ID}),
             output_schema=STATUS_OUTPUT,
             annotations=_READ_ONLY,
         ),
+        _get_status,
+    ),
+    _entry(
         Tool(
             name="zaptec_get_installation",
             title="Get installation details",
@@ -281,25 +386,25 @@ def tool_definitions() -> list[Tool]:
                 "current and mode, load balancing, authentication, enabled features, circuits and "
                 "chargers. Read-only."
             ),
-            input_schema={
-                "type": "object",
-                "properties": {"installation_id": _INSTALLATION_ID},
-                "additionalProperties": False,
-            },
+            input_schema=_object({"installation_id": _INSTALLATION_ID}),
             output_schema=INSTALLATION_OUTPUT,
             annotations=_READ_ONLY,
         ),
+        _get_installation,
+    ),
+    _entry(
         Tool(
             name="zaptec_get_charge_history",
             title="Get charging history",
             description=(
                 "Completed charging sessions in a time range (installation-local time) with "
                 "start, end, duration and energy in kWh, plus a summary. Cost fields appear only "
-                "when ZAPTEC_PRICE_PER_KWH is configured. Read-only."
+                "when ZAPTEC_PRICE_PER_KWH is configured. Custom ranges may span at most 366 "
+                "days. If truncated is true, truncated_by says whether the session list or the "
+                "summary is incomplete. Read-only."
             ),
-            input_schema={
-                "type": "object",
-                "properties": {
+            input_schema=_object(
+                {
                     "charger_id": _CHARGER_ID,
                     "time_range": {
                         "type": "string",
@@ -314,19 +419,20 @@ def tool_definitions() -> list[Tool]:
                     "end_date": {
                         "type": "string",
                         "format": "date",
-                        "description": "ISO date (YYYY-MM-DD, inclusive), required for custom",
+                        "description": (
+                            "ISO date (YYYY-MM-DD, inclusive, not before start_date), "
+                            "required for custom"
+                        ),
                     },
                 },
-                "if": {
-                    "properties": {"time_range": {"const": "custom"}},
-                    "required": ["time_range"],
-                },
-                "then": {"required": ["start_date", "end_date"]},
-                "additionalProperties": False,
-            },
+                **_CUSTOM_NEEDS_DATES,
+            ),
             output_schema=HISTORY_OUTPUT,
             annotations=_READ_ONLY,
         ),
+        _get_charge_history,
+    ),
+    _entry(
         Tool(
             name="zaptec_pause_charging",
             title="Pause charging",
@@ -335,19 +441,13 @@ def tool_definitions() -> list[Tool]:
                 "valid while the charger is in connected_charging; otherwise returns an "
                 "explanation."
             ),
-            input_schema={
-                "type": "object",
-                "properties": {"charger_id": _CHARGER_ID},
-                "additionalProperties": False,
-            },
+            input_schema=_object({"charger_id": _CHARGER_ID}),
             output_schema=COMMAND_OUTPUT,
-            annotations=ToolAnnotations(
-                read_only_hint=False,
-                destructive_hint=False,
-                idempotent_hint=True,
-                open_world_hint=True,
-            ),
+            annotations=_STATE_CHANGING,
         ),
+        _pause_charging,
+    ),
+    _entry(
         Tool(
             name="zaptec_resume_charging",
             title="Resume charging",
@@ -356,86 +456,63 @@ def tool_definitions() -> list[Tool]:
                 "(Zaptec command 507). Only valid when the charger is connected_finished with "
                 "final_stop_active; otherwise returns an explanation."
             ),
-            input_schema={
-                "type": "object",
-                "properties": {"charger_id": _CHARGER_ID},
-                "additionalProperties": False,
-            },
+            input_schema=_object({"charger_id": _CHARGER_ID}),
             output_schema=COMMAND_OUTPUT,
-            annotations=ToolAnnotations(
-                read_only_hint=False,
-                destructive_hint=False,
-                idempotent_hint=True,
-                open_world_hint=True,
-            ),
+            annotations=_STATE_CHANGING,
         ),
+        _resume_charging,
+    ),
+    _entry(
         Tool(
             name="zaptec_set_available_current",
             title="Set available current",
             description=(
                 "CHANGES STATE: set the installation's available charging current in amps (all "
-                "phases), or null to reset to the installation maximum. Zaptec recommends at most "
-                "one change per 15 minutes; the server refuses faster changes unless force=true."
+                "phases), or null to reset to the installation maximum. 0 A stops charging on "
+                "every charger of the installation until the current is raised again. Zaptec "
+                "recommends at most one change per 15 minutes; the server refuses faster changes "
+                "unless force=true."
             ),
-            input_schema={
-                "type": "object",
-                "properties": {
+            input_schema=_object(
+                {
                     "amps": {
                         "type": ["number", "null"],
                         "minimum": 0,
                         "description": (
-                            "Amps between 0 and the installation max current, or null to reset."
+                            "Amps between 0 and the installation max current, or null to reset. "
+                            "0 stops charging for the whole installation."
                         ),
                     },
                     "installation_id": _INSTALLATION_ID,
                     "force": {"type": "boolean", "default": False},
                 },
-                "required": ["amps"],
-                "additionalProperties": False,
-            },
-            output_schema=CURRENT_OUTPUT,
-            annotations=ToolAnnotations(
-                read_only_hint=False,
-                destructive_hint=True,
-                idempotent_hint=True,
-                open_world_hint=True,
+                required=["amps"],
             ),
+            output_schema=CURRENT_OUTPUT,
+            annotations=_DESTRUCTIVE,
         ),
-    ]
+        _set_available_current,
+    ),
+)
+
+# Single source of truth: tools/list and tools/call both read this table.
+_REGISTRY: dict[str, _Entry] = {e.tool.name: e for e in _ENTRIES}
 
 
-# The v2 SDK no longer validates arguments against inputSchema; do it here.
-_VALIDATORS = {
-    t.name: Draft202012Validator(t.input_schema, format_checker=Draft202012Validator.FORMAT_CHECKER)
-    for t in tool_definitions()
-}
+def tool_definitions() -> list[Tool]:
+    return [e.tool.model_copy(deep=True) for e in _REGISTRY.values()]
+
+
+def _lookup(name: str) -> _Entry:
+    entry = _REGISTRY.get(name)
+    if entry is None:
+        raise MCPError(INVALID_PARAMS, f"Unknown tool: {name}")
+    return entry
 
 
 async def dispatch(tools: ZaptecTools, name: str, arguments: dict[str, Any] | None) -> Any:
     """Route a call to ZaptecTools. Raises ZaptecError/ValueError on failure."""
-    a = arguments or {}
-    if name == "zaptec_get_status":
-        return await tools.get_status(charger_id=a.get("charger_id"))
-    if name == "zaptec_get_installation":
-        return await tools.get_installation(installation_id=a.get("installation_id"))
-    if name == "zaptec_get_charge_history":
-        return await tools.get_charge_history(
-            charger_id=a.get("charger_id"),
-            time_range=a.get("time_range") or "month",
-            start_date=a.get("start_date"),
-            end_date=a.get("end_date"),
-        )
-    if name == "zaptec_pause_charging":
-        return await tools.pause_charging(charger_id=a.get("charger_id"))
-    if name == "zaptec_resume_charging":
-        return await tools.resume_charging(charger_id=a.get("charger_id"))
-    if name == "zaptec_set_available_current":
-        return await tools.set_available_current(
-            a.get("amps"),
-            installation_id=a.get("installation_id"),
-            force=bool(a.get("force", False)),
-        )
-    raise MCPError(INVALID_PARAMS, f"Unknown tool: {name}")
+    return await _lookup(name).handler(tools, arguments or {})
 
 
 def _json(value: Any) -> str:
@@ -455,10 +532,8 @@ async def call_tool(
     tool execution errors (`isError: true`) with a JSON payload. Unknown tools
     raise MCPError, which the SDK sends as a JSON-RPC protocol error.
     """
-    validator = _VALIDATORS.get(name)
-    if validator is None:
-        raise MCPError(INVALID_PARAMS, f"Unknown tool: {name}")
-    problems = sorted(validator.iter_errors(arguments or {}), key=lambda e: list(e.path))
+    entry = _lookup(name)
+    problems = sorted(entry.validator.iter_errors(arguments or {}), key=lambda e: list(e.path))
     if problems:
         payload = {
             "error_type": "InputValidationError",
@@ -466,7 +541,7 @@ async def call_tool(
         }
         return _error(payload)
     try:
-        result = await dispatch(tools, name, arguments)
+        result = await entry.handler(tools, arguments or {})
     except ZaptecError as exc:
         log.warning("tool %s failed: %s", name, type(exc).__name__)
         return _error({"error_type": type(exc).__name__, "message": str(exc), **exc.payload})

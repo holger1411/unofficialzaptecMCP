@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 # Generated from the ObservationId enum in the official Zaptec OpenAPI spec
@@ -206,19 +207,33 @@ class Obs:
     UPTIME = 820
 
 
+class Mode:
+    """ChargerOperationMode (observation 710) codes."""
+
+    UNKNOWN = 0
+    DISCONNECTED = 1
+    REQUESTING = 2
+    CHARGING = 3
+    FINISHED = 5
+
+
 OPERATING_MODES: dict[int, str] = {
-    0: "unknown",
-    1: "disconnected",
-    2: "connected_requesting",
-    3: "connected_charging",
-    5: "connected_finished",
+    Mode.UNKNOWN: "unknown",
+    Mode.DISCONNECTED: "disconnected",
+    Mode.REQUESTING: "connected_requesting",
+    Mode.CHARGING: "connected_charging",
+    Mode.FINISHED: "connected_finished",
 }
 MODE_HINTS: dict[int, str] = {
-    0: "state unknown (charger offline or no data yet)",
-    1: "no vehicle connected",
-    2: "vehicle connected, waiting for authorization or for the vehicle to request power",
-    3: "charging",
-    5: "connected but not charging: paused by user/app, finished, or vehicle stopped drawing",
+    Mode.UNKNOWN: "state unknown (charger offline or no data yet)",
+    Mode.DISCONNECTED: "no vehicle connected",
+    Mode.REQUESTING: (
+        "vehicle connected, waiting for authorization or for the vehicle to request power"
+    ),
+    Mode.CHARGING: "charging",
+    Mode.FINISHED: (
+        "connected but not charging: paused by user/app, finished, or vehicle stopped drawing"
+    ),
 }
 DEVICE_TYPES: dict[int, str] = {
     0: "Unknown",
@@ -301,7 +316,7 @@ def parse_api_datetime(value: str | None) -> datetime | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -344,9 +359,11 @@ class StateMap:
         if raw is None:
             return None
         try:
-            return float(raw)
+            value = float(raw)
         except ValueError:
             return None
+        # "nan"/"inf" parse as floats but are not usable readings (and not valid JSON).
+        return value if math.isfinite(value) else None
 
     def get_int(self, sid: int) -> int | None:
         value = self.get_float(sid)

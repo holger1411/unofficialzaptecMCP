@@ -9,10 +9,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import re
 import time
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, NamedTuple
 
 import httpx
 
@@ -23,6 +24,7 @@ from ..utils.errors import (
     ZaptecAuthError,
     ZaptecCommandRejectedError,
     ZaptecConnectionError,
+    ZaptecGuardError,
     ZaptecNotFoundError,
     ZaptecPermissionError,
     ZaptecRateLimitError,
@@ -39,9 +41,26 @@ CMD_RESUME = 507
 REPO_URL = "https://github.com/holger1411/unofficialzaptecMCP"
 _BACKOFF_BASE = 0.5
 _TRANSIENT_STATUSES = {502, 503, 504}
+_UUID_RE = re.compile(
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
 
 SleepFn = Callable[[float], Awaitable[None]]
 ClockFn = Callable[[], float]
+
+
+class ArchivedSessions(NamedTuple):
+    sessions: list[dict[str, Any]]
+    truncated: bool  # True when the page cap was hit while the API still reported more
+
+
+def _path_id(value: object, name: str) -> str:
+    """Return `value` if it is a canonical UUID, so it is safe to put into a URL path."""
+    if isinstance(value, str) and _UUID_RE.fullmatch(value):
+        return value
+    raise ZaptecGuardError(
+        f"{name} must be a UUID like 01234567-89ab-cdef-0123-456789abcdef, got {value!r:.60}"
+    )
 
 
 def _retry_after(resp: httpx.Response) -> float | None:
@@ -76,7 +95,7 @@ def _data_list(body: Any) -> list[dict[str, Any]]:
 
 
 def _iso_utc(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class ZaptecClient:
@@ -109,18 +128,29 @@ class ZaptecClient:
 
     # -- auth -----------------------------------------------------------------
 
-    def _token_valid(self) -> bool:
-        return (
-            self._token is not None
-            and self._clock() < self._token_expires_at - TOKEN_REFRESH_MARGIN
-        )
+    def _usable_token(self, rejected: str | None) -> str | None:
+        """The cached token, unless it is expired, about to expire or the rejected one."""
+        token = self._token
+        if token is None or token == rejected:
+            return None
+        if self._clock() >= self._token_expires_at - TOKEN_REFRESH_MARGIN:
+            return None
+        return token
 
-    async def _ensure_token(self, *, force: bool = False) -> str:
-        if not force and self._token_valid() and self._token is not None:
-            return self._token
+    async def _ensure_token(self, *, rejected: str | None = None) -> str:
+        """Return a usable token, logging in at most once for concurrent callers.
+
+        `rejected` is a token the API just answered 401 for. Only if the cache
+        still holds that token is a new login needed; if another request has
+        already replaced it, the replacement is reused (no login stampede).
+        """
+        token = self._usable_token(rejected)
+        if token is not None:
+            return token
         async with self._login_lock:
-            if not force and self._token_valid() and self._token is not None:
-                return self._token
+            token = self._usable_token(rejected)
+            if token is not None:
+                return token
             return await self._login()
 
     async def _login(self) -> str:
@@ -203,7 +233,7 @@ class ZaptecClient:
                 if reauthed:
                     raise ZaptecAuthError("token rejected twice; check credentials")
                 reauthed = True
-                await self._ensure_token(force=True)
+                await self._ensure_token(rejected=token)
                 continue
             if status == 429:
                 wait = _retry_after(resp)
@@ -277,27 +307,36 @@ class ZaptecClient:
         self._installations_cache = (now + LIST_TTL, data)
         return data
 
+    # Every id that ends up in a URL path goes through _path_id first: a value like
+    # "../chargers/x/state?y=" would otherwise address a different endpoint.
+
     async def get_charger(self, charger_id: str) -> dict[str, Any]:
-        body = await self.request("GET", f"/api/chargers/{charger_id}")
+        cid = _path_id(charger_id, "charger_id")
+        body = await self.request("GET", f"/api/chargers/{cid}")
         return body if isinstance(body, dict) else {}
 
     async def get_charger_state(self, charger_id: str) -> list[dict[str, Any]]:
-        body = await self.request("GET", f"/api/chargers/{charger_id}/state")
+        cid = _path_id(charger_id, "charger_id")
+        body = await self.request("GET", f"/api/chargers/{cid}/state")
         return body if isinstance(body, list) else []
 
     async def get_installation(self, installation_id: str) -> dict[str, Any]:
-        body = await self.request("GET", f"/api/installation/{installation_id}")
+        iid = _path_id(installation_id, "installation_id")
+        body = await self.request("GET", f"/api/installation/{iid}")
         return body if isinstance(body, dict) else {}
 
     async def get_hierarchy(self, installation_id: str) -> dict[str, Any]:
-        body = await self.request("GET", f"/api/installation/{installation_id}/hierarchy")
+        iid = _path_id(installation_id, "installation_id")
+        body = await self.request("GET", f"/api/installation/{iid}/hierarchy")
         return body if isinstance(body, dict) else {}
 
     async def send_command(self, charger_id: str, command_id: int) -> None:
-        await self.request("POST", f"/api/chargers/{charger_id}/sendCommand/{command_id}")
+        cid = _path_id(charger_id, "charger_id")
+        await self.request("POST", f"/api/chargers/{cid}/sendCommand/{int(command_id)}")
 
     async def update_installation(self, installation_id: str, body: dict[str, Any]) -> None:
-        await self.request("POST", f"/api/installation/{installation_id}/update", json=body)
+        iid = _path_id(installation_id, "installation_id")
+        await self.request("POST", f"/api/installation/{iid}/update", json=body)
 
     async def archived_sessions(
         self,
@@ -306,7 +345,12 @@ class ZaptecClient:
         end: datetime,
         charger_id: str,
         max_pages: int = 10,
-    ) -> list[dict[str, Any]]:
+    ) -> ArchivedSessions:
+        """Follow the cursor for up to `max_pages` pages of 200 sessions.
+
+        `truncated` is True when the cap stopped paging although the API still
+        reported more, so callers can flag totals as incomplete.
+        """
         params: dict[str, Any] = {
             "From": _iso_utc(start),
             "To": _iso_utc(end),
@@ -314,17 +358,22 @@ class ZaptecClient:
             "PageSize": 200,
         }
         sessions: list[dict[str, Any]] = []
+        more = False
         for _ in range(max_pages):
             body = await self.request("GET", "/api/sessions/archived", params=params)
             if not isinstance(body, dict):
+                more = False
                 break
             page = field(body, "Sessions") or []
             sessions.extend(s for s in page if isinstance(s, dict))
             cursor = field(body, "Cursor")
-            if not field(body, "HasMore") or not cursor:
+            more = bool(field(body, "HasMore")) and bool(cursor)
+            if not more:
                 break
             params = {**params, "Cursor": cursor}
-        return sessions
+        if more:
+            log.warning("session history truncated after %d pages", max_pages)
+        return ArchivedSessions(sessions=sessions, truncated=more)
 
     # -- resolution -----------------------------------------------------------
 
